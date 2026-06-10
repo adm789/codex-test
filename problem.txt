@@ -1,0 +1,5 @@
+About 5 AIs failed on ,/.(pressed w/black_blank bars appeared@bottom/top of screen) issues like 1g.htm - based on 1g.htm & cf. 11ce.htm(its ,/. OK), how about give revised full codes?TIA.
+ ie. 1g.htm 出現上下黑條。 11ce.htm 正常。
+Compare both files. Find root cause.
+Modify 1g.htm to behave like 11ce.htm.
+Return complete revised file.
