@@ -10,7 +10,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#080808;color:#eee;
           font-family:system-ui,sans-serif;cursor:none}
 body.show-cursor{cursor:auto}
 
-/* 設定全域變數，--obj-pos-y 初始值 50% */
+/* 設定全域變數：網格預設焦點 95%，與 11ce.htm 的安全裁切邏輯一致 */
 :root{--cols:3;--row-h:200px;--obj-pos-y:95%}
 
 #grid{position:fixed;inset:0;overflow-y:scroll;overflow-x:hidden;z-index:1;padding:6px 6px 56px}
@@ -123,8 +123,8 @@ body.show-cursor{cursor:auto}
   <div><span class="k">PgUp / PgDn</span> 上一頁 / 下一頁</div>
   <div><span class="k">Space / S / L</span> 自動捲動 開/關</div>
   <div><span class="k">[ / ]</span> 捲速 慢/快</div>
-  <div><span class="k">, / .</span> 焦點上/下移 5%（網格：5–95%｜燈箱：±30px）</div>
-  <div><span class="k">/</span> 焦點重置 (50%)</div>
+  <div><span class="k">, / .</span> 焦點上/下移 5%（網格：5–95%｜燈箱：cover 焦點 0–100%，不平移露黑邊）</div>
+  <div><span class="k">/</span> 網格焦點重置 (50%)｜燈箱重置 contain</div>
   <div><span class="k">燈箱 Space</span> 自動翻頁 開/關</div>
   <div><span class="k">燈箱 [ / ]</span> 翻頁速度 慢/快</div>
   <div><span class="k">燈箱 T</span> 字幕 顯示/隱藏</div>
@@ -199,13 +199,15 @@ let uiTimer=null,cursorTimer=null,uiLocked=false;
 let lbIdx=0;
 let lbScale=1;          
 let lbPanX=0, lbPanY=0; 
+let lbCoverFocus=false;
+let lbObjPosY=95;
 let lbDir=1;
 let lbAutoPlay=false,lbAutoTimer=null,lbSpeed=3000;
 
 let lbStatePerIndex = new Map();
 let lbStateRestoredForCurrent = false;
 
-let objPosY = 95; /* 預設 50% 居中 */
+let objPosY = 95; /* 與 11ce.htm 相同：預設保留底部焦點 */
 
 const _fallbackPool=[
   "月光落在鎖骨上，涼涼的，像一片薄霜。",
@@ -408,7 +410,15 @@ function lbPan(dy){
 
 function applyLbTransform(){
   const m=$('lbMedia');
-  if(m) m.style.transform=`scale(${lbScale}) translate(${lbPanX/lbScale}px, ${lbPanY/lbScale}px)`;
+  if(m){
+    if(lbScale <= 1.01 && lbCoverFocus){
+      lbPanX = 0;
+      lbPanY = 0;
+    }
+    m.style.objectFit = lbCoverFocus ? 'cover' : 'contain';
+    m.style.objectPosition = lbCoverFocus ? `center ${lbObjPosY}%` : 'center center';
+    m.style.transform=`scale(${lbScale}) translate(${lbPanX/lbScale}px, ${lbPanY/lbScale}px)`;
+  }
   const zoomBtn = $('lcZoomOut');
   if(zoomBtn) zoomBtn.textContent = lbScale.toFixed(1) + 'x';
 }
@@ -420,10 +430,12 @@ function saveCurrentLbStateToMap(){
   if(!list.length) return;
   const idx = lbIdx;
   let state = lbStatePerIndex.get(idx);
-  if(!state) state = { scale:1, panX:0, panY:0 };
+  if(!state) state = { scale:1, panX:0, panY:0, coverFocus:false, objPosY:95 };
   state.scale = lbScale;
   state.panX = lbPanX;
   state.panY = lbPanY;
+  state.coverFocus = lbCoverFocus;
+  state.objPosY = lbObjPosY;
   lbStatePerIndex.set(idx, state);
 }
 
@@ -433,10 +445,14 @@ function restoreLbStateForIndex(idx){
     lbScale = state.scale;
     lbPanX = state.panX;
     lbPanY = state.panY;
+    lbCoverFocus = !!state.coverFocus;
+    lbObjPosY = Number.isFinite(state.objPosY) ? state.objPosY : objPosY;
   } else {
     lbScale = 1;
     lbPanX = 0;
     lbPanY = 0;
+    lbCoverFocus = false;
+    lbObjPosY = objPosY;
   }
   applyLbTransform();
 }
@@ -542,8 +558,8 @@ function closeLightbox(){
   lb.classList.remove('show','lb-hover');
   document.body.classList.remove('show-cursor');
   clearTimeout(lbHoverTimer);
-  const m=$('lbMedia');if(m){ m.src=''; m.style.transform=''; }
-  lbScale = 1; lbPanX=0; lbPanY=0;
+  const m=$('lbMedia');if(m){ m.src=''; m.style.transform=''; m.style.objectFit='contain'; m.style.objectPosition='center center'; }
+  lbScale = 1; lbPanX=0; lbPanY=0; lbCoverFocus=false; lbObjPosY=objPosY;
   stopLbAuto();
   resetUITimer();
 }
@@ -679,8 +695,40 @@ document.addEventListener('keydown',e=>{
     if(e.key.toLowerCase()==='t'){ showText=!showText; lbTxt.classList.toggle('show',showText); return; }
     if(e.key==='['){lbSpeed=Math.min(9000,lbSpeed+300); updateLbAutoBtn(); return;}
     if(e.key===']'){lbSpeed=Math.max(400,lbSpeed-300); updateLbAutoBtn(); return;}
-    if(e.key===','||e.key==='<'){ e.preventDefault(); lbPanY-=30; applyLbTransform(); saveCurrentLbStateToMap(); stat.textContent=`燈箱焦點 ↑ Y:${lbPanY}px`; return; }
-    if(e.key==='.'||e.key==='>'){ e.preventDefault(); lbPanY+=30; applyLbTransform(); saveCurrentLbStateToMap(); stat.textContent=`燈箱焦點 ↓ Y:${lbPanY}px`; return; }
+    if(e.key===','||e.key==='<'){
+      e.preventDefault();
+      lbCoverFocus = true;
+      lbObjPosY = Math.max(0, lbObjPosY - 5);
+      lbPanX = 0;
+      lbPanY = 0;
+      applyLbTransform();
+      saveCurrentLbStateToMap();
+      stat.textContent=`燈箱焦點 ↑ ${lbObjPosY}%`;
+      return;
+    }
+    if(e.key==='.'||e.key==='>'){
+      e.preventDefault();
+      lbCoverFocus = true;
+      lbObjPosY = Math.min(100, lbObjPosY + 5);
+      lbPanX = 0;
+      lbPanY = 0;
+      applyLbTransform();
+      saveCurrentLbStateToMap();
+      stat.textContent=`燈箱焦點 ↓ ${lbObjPosY}%`;
+      return;
+    }
+    if(e.key==='/'){
+      e.preventDefault();
+      lbCoverFocus = false;
+      lbObjPosY = objPosY;
+      lbScale = 1;
+      lbPanX = 0;
+      lbPanY = 0;
+      applyLbTransform();
+      saveCurrentLbStateToMap();
+      stat.textContent='燈箱焦點：已重置 (contain)';
+      return;
+    }
     return;
   }
   
