@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Guestbook</title>
+    <style>
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:640px;margin:0 auto;padding:20px;line-height:1.8;background:#fafafa;color:#222;}
+        .notice,.form-area,.msg-box{background:#fff;border:1px solid #e8e8e8;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+        .notice{padding:12px 16px;margin-bottom:16px;font-size:13px;color:#555;}
+        .notice strong{color:#667eea;}
+        .form-area{padding:16px 20px 18px;margin-bottom:24px;}
+        .form-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+        .form-row label{font-weight:500;font-size:14px;color:#333;min-width:50px;}
+        .form-row input[type="text"]{flex:1;padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;transition:border-color .2s;}
+        .form-row input[type="text"]:focus,.form-area textarea:focus{border-color:#667eea;outline:none;box-shadow:0 0 0 3px rgba(102,126,234,.1);}
+        .form-area textarea{width:100%;height:96px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:Consolas,Monaco,monospace;font-size:13px;resize:vertical;transition:border-color .2s;box-sizing:border-box;}
+        .form-bottom{display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;}
+        .form-bottom label{font-size:13px;color:#555;cursor:pointer;display:flex;align-items:center;gap:4px;}
+        .btn-submit,.btn-utility{padding:6px 16px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:transform .15s,box-shadow .2s;}
+        .btn-submit{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;box-shadow:0 2px 8px rgba(102,126,234,.3);}
+        .btn-utility{background:#f0f0f0;color:#333;border:1px solid #ddd;}
+        .btn-submit:hover,.btn-utility:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(102,126,234,.22);}
+        .list-title{font-size:14px;font-weight:600;margin:4px 0 10px;color:#555;}
+        .list-title span{background:#667eea;color:#fff;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:5px;}
+        .msg-box{border-radius:8px;padding:12px 14px;margin-bottom:10px;white-space:pre-wrap;word-wrap:break-word;position:relative;transition:box-shadow .2s;}
+        .msg-box:hover{box-shadow:0 2px 12px rgba(0,0,0,.08);}
+        .msg-box *{max-width:100%;box-sizing:border-box;}.msg-box b{color:#e44;}.msg-box a{color:#07c;text-decoration:none;}.msg-box a:hover{text-decoration:underline;}.msg-box img{max-width:100%;border-radius:4px;}
+        .msg-actions{position:absolute;top:6px;right:6px;display:flex;gap:2px;opacity:0;transition:opacity .2s;background:rgba(255,255,255,.9);padding:2px;border-radius:6px;}.msg-box:hover .msg-actions{opacity:1;}
+        .msg-actions button{border:none;background:none;cursor:pointer;font-size:14px;padding:3px 5px;border-radius:4px;line-height:1;transition:background .15s;}.msg-actions button:hover{background:#f0f0f0;}.btn-copy{color:#07c}.btn-del{color:#c44}
+        .btn-cc{display:inline-block;margin:6px 0 2px;padding:4px 14px;background:#2d2d2d;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;transition:background .2s;}.btn-cc:hover{background:#444}.btn-cc.ok{background:#4caf50}
+        .long-text-wrapper{margin:4px 0;}.btn-expand{font-size:12px;padding:3px 12px;background:#f0f0f0;color:#333;border:1px solid #ddd;border-radius:4px;cursor:pointer;transition:all .2s;display:inline-block;}.btn-expand:hover{background:#e8e8e8;border-color:#667eea}.btn-expand.active{background:#667eea;color:#fff;border-color:#667eea}.long-text-content{max-height:400px;overflow-y:auto;margin-top:6px;padding:8px 12px;background:#f8f8f8;border-radius:4px;white-space:pre-wrap;border-left:3px solid #667eea;font-size:13px;line-height:1.6;}
+        #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(16px);background:rgba(34,34,34,.92);color:#fff;padding:8px 24px;border-radius:24px;font-size:14px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;z-index:9999;backdrop-filter:blur(4px)}
+        .empty-state{color:#999;font-size:13px;padding:4px 0;}
+    </style>
+</head>
+<body>
+<div class="notice"><strong>Pure HTML guestbook:</strong> this file works on static hosts such as GitHub Pages. Messages are stored in this browser's localStorage; use Export/Import to move them between browsers or publish a snapshot.</div>
+<div class="form-area">
+    <form id="guestForm">
+        <div class="form-row"><label for="fName">Name</label><input type="text" name="name" id="fName" required></div>
+        <textarea name="message" id="fMsg" required placeholder="請輸入留言內容..."></textarea>
+        <div class="form-bottom">
+            <label><input type="checkbox" id="hasCopyBtn"> 📋 複製按鈕</label>
+            <label><input type="checkbox" id="packLongText" checked> 📄 自動打包長文</label>
+            <button type="submit" class="btn-submit">送出留言</button>
+            <button type="button" class="btn-utility" id="exportBtn">Export JSON</button>
+            <label class="btn-utility" for="importFile">Import JSON</label><input type="file" id="importFile" accept="application/json" hidden>
+        </div>
+    </form>
+</div>
+<div class="list-title">所有留言 <span id="entryCount">0</span></div>
+<div id="entries"></div>
+<div id="toast"></div>
+<script>
+(function(){
+    var storageKey='static_guestbook_entries_v1';
+    var draftNameKey='static_guestbook_name';
+    var draftMsgKey='static_guestbook_msg';
+    var entries=[];
+    var entryRoot=document.getElementById('entries');
+    var entryCount=document.getElementById('entryCount');
+    var form=document.getElementById('guestForm');
+    var nameInput=document.getElementById('fName');
+    var msgInput=document.getElementById('fMsg');
+    var toastTimer=null;
+
+    function escapeHtml(text){return String(text).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});}
+    function uid(){return 'lt_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
+    function save(){localStorage.setItem(storageKey,JSON.stringify(entries));}
+    function load(){try{entries=JSON.parse(localStorage.getItem(storageKey)||'[]');if(!Array.isArray(entries))entries=[];}catch(e){entries=[];}}
+    function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.style.opacity='0';t.style.transform='translateX(-50%) translateY(20px)';},2000);}
+    function linkify(text){var escaped=escapeHtml(text);var imgExt=/\.(jpe?g|png|gif|webp|svg|bmp)(\?.*)?$/i;return escaped.replace(/(https?:\/\/[^\s<>&quot;']+)/gi,function(url){var safe=escapeHtml(url);if(imgExt.test(url)){return '<a target="_blank" rel="noopener" href="'+safe+'"><img src="'+safe+'" style="max-height:80px;max-width:160px;display:inline-block;margin:2px 4px 2px 0;border:1px solid #ddd;border-radius:3px;cursor:pointer;" alt="img"></a>';}return '<a target="_blank" rel="noopener" href="'+safe+'">'+safe+'</a>';});}
+    function formatMessage(raw,packLongText){var text=String(raw||'').replace(/\r\n?/g,'\n');var lines=text.split('\n');if(packLongText&&lines.length>=8){var id=uid();var label='📄 '+lines.length+' 行長文（點擊展開）';return '<div class="long-text-wrapper"><button class="btn-expand" data-target="'+id+'" data-label-collapsed="'+escapeHtml(label)+'" data-label-expanded="📄 收起長文">'+escapeHtml(label)+'</button><div id="'+id+'" class="long-text-content" style="display:none">'+linkify(text)+'</div></div>';}return linkify(text).replace(/\n/g,'<br>');}
+    function copyPlainText(text,callback){if(navigator.clipboard){navigator.clipboard.writeText(text).then(callback).catch(function(){fallbackCopy(text);callback&&callback();});}else{fallbackCopy(text);callback&&callback();}}
+    function fallbackCopy(text){var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+    function render(){entryRoot.innerHTML='';entryCount.textContent=entries.length;if(!entries.length){entryRoot.innerHTML='<div class="empty-state">（尚無留言）</div>';return;}entries.forEach(function(entry,index){var box=document.createElement('div');box.className='msg-box';box.dataset.raw=entry.message;box.innerHTML='<div class="msg-actions"><button class="btn-copy" title="複製留言">📋</button><button class="btn-del" title="刪除留言">🗑</button></div>['+escapeHtml(entry.time)+'] <b>'+escapeHtml(entry.name||'訪客')+'</b>:\n'+formatMessage(entry.message,entry.packLongText)+(entry.hasCopyBtn?'\n<button class="btn-cc">📋 複製內容</button>':'');box.querySelector('.btn-copy').addEventListener('click',function(){copyPlainText(entry.message,function(){showToast('已複製原始內容！');});});box.querySelector('.btn-del').addEventListener('click',function(){if(confirm('確定要刪除這則留言嗎？\n（此操作無法復原）')){entries.splice(index,1);save();render();}});var cc=box.querySelector('.btn-cc');if(cc){cc.addEventListener('click',function(){copyPlainText(entry.message,function(){cc.textContent='✅ 已複製原始內容！';cc.classList.add('ok');showToast('已複製原始內容！');setTimeout(function(){cc.textContent='📋 複製內容';cc.classList.remove('ok');},2000);});});}box.querySelectorAll('.btn-expand').forEach(function(btn){btn.addEventListener('click',function(){var content=document.getElementById(btn.getAttribute('data-target'));if(!content)return;var opening=content.style.display==='none'||content.style.display==='';content.style.display=opening?'block':'none';btn.textContent=opening?btn.getAttribute('data-label-expanded'):btn.getAttribute('data-label-collapsed');btn.classList.toggle('active',opening);});});entryRoot.appendChild(box);});}
+
+    nameInput.value=localStorage.getItem(draftNameKey)||'';msgInput.value=localStorage.getItem(draftMsgKey)||'';
+    nameInput.addEventListener('input',function(){localStorage.setItem(draftNameKey,nameInput.value);});
+    msgInput.addEventListener('input',function(){localStorage.setItem(draftMsgKey,msgInput.value);});
+    form.addEventListener('submit',function(ev){ev.preventDefault();var msg=msgInput.value.trim();if(!msg)return;entries.unshift({name:nameInput.value.trim()||'訪客',message:msg,time:new Date().toLocaleString('sv-SE',{hour12:false}),hasCopyBtn:document.getElementById('hasCopyBtn').checked,packLongText:document.getElementById('packLongText').checked});save();msgInput.value='';localStorage.removeItem(draftMsgKey);render();showToast('留言已儲存在此瀏覽器！');});
+    document.getElementById('exportBtn').addEventListener('click',function(){var blob=new Blob([JSON.stringify(entries,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='guestbook-entries.json';a.click();URL.revokeObjectURL(a.href);});
+    document.getElementById('importFile').addEventListener('change',function(ev){var file=ev.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var imported=JSON.parse(reader.result);if(!Array.isArray(imported))throw new Error('not array');entries=imported.concat(entries);save();render();showToast('已匯入留言！');}catch(e){alert('Import failed: JSON format is invalid.');}};reader.readAsText(file);ev.target.value='';});
+    load();render();
+})();
+</script>
+</body>
+</html>
