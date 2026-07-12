@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Multi File Download / Delete</title>
+  <style>
+    :root{color-scheme:light dark;--bg:#f6f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--primary:#2563eb;--danger:#dc2626;--ok:#059669;--warn:#d97706;}
+    @media (prefers-color-scheme:dark){:root{--bg:#111827;--card:#1f2937;--text:#f9fafb;--muted:#9ca3af;--line:#374151;}}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",Arial,sans-serif;line-height:1.5}.wrap{max-width:1120px;margin:0 auto;padding:22px}h1{font-size:1.55rem;margin:0 0 6px}.sub{color:var(--muted);margin:0 0 18px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.06);padding:16px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}.field{grid-column:span 3}.field.wide{grid-column:span 4}.field.full{grid-column:1/-1}label{display:block;font-weight:650;font-size:.88rem;margin:0 0 5px}input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text)}input[type=checkbox]{width:auto}button{border:0;border-radius:9px;padding:9px 13px;font-weight:700;cursor:pointer;background:#e5e7eb;color:#111827}button.primary{background:var(--primary);color:white}button.danger{background:var(--danger);color:white}button.ok{background:var(--ok);color:white}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.hint{font-size:.86rem;color:var(--muted)}.pathbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.crumb{color:var(--primary);cursor:pointer;text-decoration:underline}.status{white-space:pre-wrap;border-radius:10px;padding:10px 12px;background:rgba(37,99,235,.09);font-size:.9rem}.status.err{background:rgba(220,38,38,.11)}.status.ok{background:rgba(5,150,105,.12)}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--line);padding:9px 7px;text-align:left;vertical-align:middle}th{font-size:.82rem;color:var(--muted);font-weight:750}tr:hover{background:rgba(127,127,127,.06)}.name{display:flex;align-items:center;gap:8px}.folder{font-weight:750;color:var(--primary);cursor:pointer}.file{word-break:break-all}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted);font-size:.78rem}.toolbar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}.drop{border:2px dashed var(--line);border-radius:12px;padding:12px;text-align:center;color:var(--muted)}.drop.drag{border-color:var(--primary);background:rgba(37,99,235,.08)}@media(max-width:760px){.field,.field.wide{grid-column:1/-1}.wrap{padding:12px}th:nth-child(4),td:nth-child(4){display:none}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GitHub 批次檔案工具</h1>
+  <p class="sub">在瀏覽器中列出 repository 目錄，multi-select 後批次下載或刪除。適合 GitHub Pages 靜態部署。</p>
+
+  <section class="card">
+    <div class="grid">
+      <div class="field"><label>Owner</label><input id="owner" placeholder="adm789"></div>
+      <div class="field"><label>Repo</label><input id="repo" placeholder="tfc"></div>
+      <div class="field"><label>Branch</label><input id="branch" placeholder="main"></div>
+      <div class="field"><label>Path</label><input id="path" placeholder="folder/subfolder"></div>
+      <div class="field wide"><label>GitHub token（刪除 private repo 必填）</label><input id="token" type="password" autocomplete="off" placeholder="github_pat_... / fine-grained token"></div>
+      <div class="field wide"><label>Commit message</label><input id="message" value="Delete selected files from web tool"></div>
+      <div class="field"><label>&nbsp;</label><button class="primary" id="loadBtn">Load files</button></div>
+      <div class="field full hint">Token 只保存在此頁記憶體與可選 localStorage；建議使用 fine-grained token，只授權此 repo 的 Contents read/write。刪除會逐檔呼叫 GitHub Contents API 並產生 commit。</div>
+    </div>
+  </section>
+
+  <section class="card toolbar">
+    <div class="pathbar" id="crumbs"></div>
+    <div class="actions">
+      <label class="hint"><input type="checkbox" id="remember"> remember settings</label>
+      <button id="selectAllBtn">Select all files</button>
+      <button id="clearBtn">Clear</button>
+      <button class="ok" id="downloadBtn">Download selected</button>
+      <button class="danger" id="deleteBtn">Delete selected</button>
+    </div>
+  </section>
+
+  <section class="card drop" id="dropZone">Tip: 可把 GitHub directory URL 貼到本頁，或拖入文字 URL，自動填 Owner/Repo/Path。</section>
+  <section class="card"><div id="status" class="status">Ready.</div></section>
+  <section class="card"><table><thead><tr><th><input type="checkbox" id="toggleAll"></th><th>Name</th><th>Size</th><th>SHA</th><th>Download</th></tr></thead><tbody id="tbody"></tbody></table></section>
+</div>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var items=[], currentPath='';
+  ['owner','repo','branch','path','token','message'].forEach(function(id){var v=localStorage.getItem('ghfm_'+id);if(v)$(id).value=v;});
+  $('remember').checked=localStorage.getItem('ghfm_remember')==='1';
+  function api(path){var owner=$('owner').value.trim(), repo=$('repo').value.trim();return 'https://api.github.com/repos/'+encodeURIComponent(owner)+'/'+encodeURIComponent(repo)+path;}
+  function headers(){var h={'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};var t=$('token').value.trim();if(t)h.Authorization='Bearer '+t;return h;}
+  function setStatus(msg,type){$('status').textContent=msg;$('status').className='status '+(type||'');}
+  function saveSettings(){localStorage.setItem('ghfm_remember',$('remember').checked?'1':'0');['owner','repo','branch','path','message'].forEach(function(id){localStorage.setItem('ghfm_'+id,$(id).value);});if($('remember').checked)localStorage.setItem('ghfm_token',$('token').value);else localStorage.removeItem('ghfm_token');}
+  function parseGitHubUrl(text){var m=String(text).match(/github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/([^\/]+)\/?(.*))?/i);if(!m)return false;$('owner').value=m[1];$('repo').value=m[2].replace(/\.git$/,'');if(m[3])$('branch').value=decodeURIComponent(m[3]);$('path').value=m[4]?decodeURIComponent(m[4]):'';return true;}
+  function renderCrumbs(){var parts=currentPath?currentPath.split('/').filter(Boolean):[];var html='<span class="crumb" data-path="">root</span>';var acc='';parts.forEach(function(p){acc+=(acc?'/':'')+p;html+=' / <span class="crumb" data-path="'+acc.replace(/"/g,'&quot;')+'">'+p+'</span>';});$('crumbs').innerHTML=html;$('crumbs').querySelectorAll('.crumb').forEach(function(c){c.onclick=function(){$('path').value=c.dataset.path;load();};});}
+  function row(item){var tr=document.createElement('tr');var isFile=item.type==='file';tr.innerHTML='<td>'+(isFile?'<input class="pick" type="checkbox">':'')+'</td><td><div class="name"><span>'+(isFile?'📄':'📁')+'</span><span class="'+(isFile?'file':'folder')+'"></span></div></td><td>'+(isFile?formatSize(item.size):'<span class="pill">dir</span>')+'</td><td><code>'+item.sha.slice(0,10)+'</code></td><td>'+(isFile?'<a target="_blank" rel="noopener">raw</a>':'')+'</td>';tr.querySelector('.name span:last-child').textContent=item.name;if(!isFile){tr.querySelector('.folder').onclick=function(){$('path').value=item.path;load();};}else{tr.querySelector('.pick').dataset.path=item.path;tr.querySelector('a').href=item.download_url;}return tr;}
+  function formatSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB';}
+  async function load(){saveSettings();var branch=$('branch').value.trim()||'main';currentPath=$('path').value.trim().replace(/^\/|\/$/g,'');setStatus('Loading '+(currentPath||'/')+' ...');var res=await fetch(api('/contents/'+encodeURIComponent(currentPath).replace(/%2F/g,'/')+'?ref='+encodeURIComponent(branch)),{headers:headers()});if(!res.ok){setStatus('Load failed: '+res.status+' '+await res.text(),'err');return;}var data=await res.json();items=Array.isArray(data)?data:[data];items.sort(function(a,b){return (a.type===b.type?a.name.localeCompare(b.name):a.type==='dir'?-1:1);});$('tbody').innerHTML='';items.forEach(function(it){$('tbody').appendChild(row(it));});renderCrumbs();setStatus('Loaded '+items.length+' item(s). Select files to download or delete.','ok');}
+  function selected(){var paths=[].slice.call(document.querySelectorAll('.pick:checked')).map(function(c){return c.dataset.path;});return items.filter(function(i){return paths.indexOf(i.path)>=0;});}
+  async function downloadOne(item){var res=await fetch(item.download_url,{headers:headers()});if(!res.ok)throw new Error(item.path+': '+res.status);var blob=await res.blob();var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=item.name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}
+  async function deleteOne(item){var branch=$('branch').value.trim()||'main';var body={message:$('message').value.trim()||('Delete '+item.path),sha:item.sha,branch:branch};var res=await fetch(api('/contents/'+encodeURIComponent(item.path).replace(/%2F/g,'/')),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},headers()),body:JSON.stringify(body)});if(!res.ok)throw new Error(item.path+': '+res.status+' '+await res.text());}
+  $('loadBtn').onclick=load;$('selectAllBtn').onclick=function(){document.querySelectorAll('.pick').forEach(function(c){c.checked=true;});};$('clearBtn').onclick=function(){document.querySelectorAll('.pick').forEach(function(c){c.checked=false;});$('toggleAll').checked=false;};$('toggleAll').onchange=function(){document.querySelectorAll('.pick').forEach(function(c){c.checked=$('toggleAll').checked;});};
+  $('downloadBtn').onclick=async function(){var list=selected();if(!list.length)return alert('Select at least one file.');setStatus('Downloading '+list.length+' file(s)...');for(var i=0;i<list.length;i++){await downloadOne(list[i]);setStatus('Downloaded '+(i+1)+'/'+list.length+': '+list[i].path);}setStatus('Download clicks started for '+list.length+' file(s).','ok');};
+  $('deleteBtn').onclick=async function(){var list=selected();if(!list.length)return alert('Select at least one file.');if(!$('token').value.trim())return alert('Delete needs a GitHub token with Contents write permission.');if(!confirm('Delete '+list.length+' selected file(s) from GitHub? This creates commits and cannot be undone here.'))return;setStatus('Deleting '+list.length+' file(s)...');try{for(var i=0;i<list.length;i++){await deleteOne(list[i]);setStatus('Deleted '+(i+1)+'/'+list.length+': '+list[i].path);}setStatus('Deleted '+list.length+' file(s). Reloading...','ok');await load();}catch(e){setStatus('Delete failed: '+e.message,'err');}};
+  $('dropZone').addEventListener('dragover',function(e){e.preventDefault();$('dropZone').classList.add('drag');});$('dropZone').addEventListener('dragleave',function(){$('dropZone').classList.remove('drag');});$('dropZone').addEventListener('drop',function(e){e.preventDefault();$('dropZone').classList.remove('drag');var txt=e.dataTransfer.getData('text/plain');if(parseGitHubUrl(txt))load();});window.addEventListener('paste',function(e){var txt=(e.clipboardData||window.clipboardData).getData('text');if(parseGitHubUrl(txt))load();});
+})();
+</script>
+</body>
+</html>
