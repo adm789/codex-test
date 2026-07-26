@@ -53,15 +53,10 @@ function makeLongTextBlock($longText) {
     $id = 'lt_' . md5($longText) . '_' . substr(str_replace('.', '', uniqid('', true)), -10);
     $lineCount = substr_count($longText, "\n") + 1;
     $escapedText = htmlspecialchars($longText, ENT_QUOTES, 'UTF-8');
-    $previewLines = array_slice(explode("\n", $longText), 0, 2);
-    $preview = implode("\n", $previewLines);
-    if ($lineCount > 2) $preview .= " …";
-    $escapedPreview = htmlspecialchars($preview, ENT_QUOTES, 'UTF-8');
     $labelCollapsed = '📄 ' . $lineCount . ' 行長文（點擊展開）';
     $labelExpanded  = '📄 收起長文';
 
     return '<div class="long-text-wrapper">'
-         . '<div class="long-text-preview" data-preview-for="' . $id . '">' . $escapedPreview . '</div>'
          . '<button class="btn-expand" onclick="toggleLongText(this)" data-target="' . $id . '"'
          . ' data-label-collapsed="' . htmlspecialchars($labelCollapsed, ENT_QUOTES, 'UTF-8') . '"'
          . ' data-label-expanded="' . htmlspecialchars($labelExpanded, ENT_QUOTES, 'UTF-8') . '">'
