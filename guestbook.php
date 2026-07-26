@@ -41,6 +41,33 @@ function linkify($text) {
     return $result;
 }
 
+function shouldPackLongText($text) {
+    $normalized = str_replace("\r\n", "\n", str_replace("\r", "\n", (string)$text));
+    $lines = explode("\n", $normalized);
+    $charCount = preg_match_all('/\S/u', $normalized, $m);
+    return count($lines) >= 8 || (count($lines) >= 3 && $charCount > 300);
+}
+
+function makeLongTextBlock($longText) {
+    $longText = trim($longText);
+    $id = 'lt_' . md5($longText) . '_' . substr(str_replace('.', '', uniqid('', true)), -10);
+    $lineCount = substr_count($longText, "\n") + 1;
+    $escapedText = htmlspecialchars($longText, ENT_QUOTES, 'UTF-8');
+    $labelCollapsed = '📄 ' . $lineCount . ' 行長文（點擊展開）';
+    $labelExpanded  = '📄 收起長文';
+
+    return '<div class="long-text-wrapper">'
+         . '<button class="btn-expand" onclick="toggleLongText(this)" data-target="' . $id . '"'
+         . ' data-label-collapsed="' . htmlspecialchars($labelCollapsed, ENT_QUOTES, 'UTF-8') . '"'
+         . ' data-label-expanded="' . htmlspecialchars($labelExpanded, ENT_QUOTES, 'UTF-8') . '">'
+         . $labelCollapsed
+         . '</button>'
+         . '<div id="' . $id . '" class="long-text-content" style="display:none;margin-top:6px;padding:8px 12px;background:#f8f8f8;border-radius:4px;white-space:pre-wrap;border-left:3px solid #667eea;font-size:13px;line-height:1.6;">'
+         . $escapedText
+         . '</div>'
+         . '</div>';
+}
+
 function processMsg($msg, $packLongText = true) {
     $btnBlocks = [];
     $msg = preg_replace_callback(
@@ -102,33 +129,13 @@ function processMsg($msg, $packLongText = true) {
                 if (strpos($longText, 'long-text-wrapper') !== false) return $m[0];
                 if (strpos($longText, 'data-raw') !== false) return $m[0];
                 
-                // id 不能只用內容的 md5：若兩則留言貼了一模一樣的長文，
-                // md5 會相同，document.getElementById 只會抓到第一個，
-                // 導致點到第二則的按鈕卻展開/收合到第一則的內容，版面跟著跑掉。
-                // 改成每次都附加唯一序號，確保同頁面不會有重複 id。
-                $id = 'lt_' . md5($longText) . '_' . substr(str_replace('.', '', uniqid('', true)), -10);
-                $lineCount = substr_count($longText, "\n") + 1;
-                $escapedText = htmlspecialchars($longText, ENT_QUOTES, 'UTF-8');
-
-                // 分別存好「收起」與「展開」時的按鈕文字，並存進 data-* 屬性，
-                // 避免 JS 端用字串取代猜文字造成標籤內容跑掉
-                $labelCollapsed = '📄 ' . $lineCount . ' 行長文（點擊展開）';
-                $labelExpanded  = '📄 收起長文';
-
-                // 預設收合：內容 display:none，按鈕文字與 class 需與此狀態一致
-                return '<div class="long-text-wrapper">'
-                     . '<button class="btn-expand" onclick="toggleLongText(this)" data-target="' . $id . '"'
-                     . ' data-label-collapsed="' . htmlspecialchars($labelCollapsed, ENT_QUOTES, 'UTF-8') . '"'
-                     . ' data-label-expanded="' . htmlspecialchars($labelExpanded, ENT_QUOTES, 'UTF-8') . '">'
-                     . $labelCollapsed
-                     . '</button>'
-                     . '<div id="' . $id . '" class="long-text-content" style="display:none;margin-top:6px;padding:8px 12px;background:#f8f8f8;border-radius:4px;white-space:pre-wrap;border-left:3px solid #667eea;font-size:13px;line-height:1.6;">'
-                     . $escapedText
-                     . '</div>'
-                     . '</div>';
+                return makeLongTextBlock($longText);
             },
             $msg
         );
+        if (strpos($msg, 'long-text-wrapper') === false && shouldPackLongText($msg)) {
+            $msg = makeLongTextBlock($msg);
+        }
     }
     
     $allowed = '<a><b><i><u><s><em><strong><br><p><img><ul><ol><li>'
@@ -369,6 +376,7 @@ $entries = readHtm($dataFile);
             border: 1px solid #f0f0f0;
             white-space: pre-wrap;
             word-wrap: break-word;
+            overflow-wrap: anywhere;
             position: relative;
             transition: box-shadow 0.2s;
         }
@@ -488,6 +496,7 @@ $entries = readHtm($dataFile);
         .long-text-content {
             max-height: 400px;
             overflow-y: auto;
+            overflow-wrap: anywhere;
         }
         
         #toast {
@@ -552,7 +561,7 @@ $entries = readHtm($dataFile);
         // 計算行數（包含換行和 <br>）
         $lineCount = substr_count($inner, "\n") + substr_count($inner, '<br');
         $bottomDel = ($lineCount > 10)
-            ? '<div class="bottom-del">' . $delForm . '<button type="submit">🗑 刪除此則留言</button></form></div>'
+            ? '<div class="bottom-del" data-min-lines="10" data-max-screen="0.8">' . $delForm . '<button type="submit">🗑 刪除此則留言</button></form></div>'
             : '';
 
         // 重新組裝：開頭 tag（保留 data-raw）+ 動作按鈕 + 原內容 + （可選）底部刪除
@@ -629,13 +638,31 @@ function toggleLongText(btn) {
         content.style.display = 'block';
         btn.textContent = expandedLabel;
         btn.classList.add('active');
+        syncBottomDelete(btn.closest('.msg-box'));
     } else {
         content.style.display = 'none';
         btn.textContent = collapsedLabel;
         btn.classList.remove('active');
+        syncBottomDelete(btn.closest('.msg-box'));
     }
 }
 
+
+function syncBottomDelete(box) {
+    if (!box) return;
+    var bottom = box.querySelector('.bottom-del');
+    if (!bottom) return;
+    var lineHeight = parseFloat(getComputedStyle(box).lineHeight) || 18;
+    var lines = Math.ceil(box.scrollHeight / lineHeight);
+    var minLines = parseInt(bottom.getAttribute('data-min-lines') || '10', 10);
+    var maxScreen = parseFloat(bottom.getAttribute('data-max-screen')) || 0.8;
+    var shouldShow = lines > minLines && box.scrollHeight > window.innerHeight * maxScreen;
+    bottom.style.display = shouldShow ? '' : 'none';
+}
+
+function syncAllBottomDeletes() {
+    document.querySelectorAll('.msg-box').forEach(syncBottomDelete);
+}
 // ===== 複製功能 =====
 function copyPlainText(text, callback) {
     if (navigator.clipboard) {
@@ -778,6 +805,8 @@ function copyContent(btn) {
 
 // ===== 初始化：確保長文按鈕文字與內容的收合狀態一致 =====
 document.addEventListener('DOMContentLoaded', function() {
+    syncAllBottomDeletes();
+    window.addEventListener('resize', syncAllBottomDeletes);
     document.querySelectorAll('.long-text-wrapper').forEach(function(wrapper){
         var content = wrapper.querySelector('.long-text-content');
         var btn = wrapper.querySelector('.btn-expand');
