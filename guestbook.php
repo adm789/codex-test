@@ -473,6 +473,20 @@ $entries = readHtm($dataFile);
         .long-text-wrapper {
             margin: 4px 0;
         }
+        .long-text-preview {
+            margin: 4px 0 6px;
+            padding: 6px 10px;
+            background: #fafafa;
+            border-left: 3px solid #ddd;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            color: #555;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 3.2em;
+            overflow: hidden;
+        }
         .btn-expand {
             font-size: 12px;
             padding: 3px 12px;
@@ -636,11 +650,15 @@ function toggleLongText(btn) {
 
     if (content.style.display === 'none' || content.style.display === '') {
         content.style.display = 'block';
+        var preview = content.parentNode.querySelector('.long-text-preview');
+        if (preview) preview.style.display = 'none';
         btn.textContent = expandedLabel;
         btn.classList.add('active');
         syncBottomDelete(btn.closest('.msg-box'));
     } else {
         content.style.display = 'none';
+        var preview = content.parentNode.querySelector('.long-text-preview');
+        if (preview) preview.style.display = 'block';
         btn.textContent = collapsedLabel;
         btn.classList.remove('active');
         syncBottomDelete(btn.closest('.msg-box'));
@@ -813,10 +831,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!content || !btn) return;
 
         var isCollapsed = (content.style.display === 'none');
+        var preview = wrapper.querySelector('.long-text-preview');
         if (isCollapsed) {
+            if (preview) preview.style.display = 'block';
             btn.textContent = btn.getAttribute('data-label-collapsed') || btn.textContent;
             btn.classList.remove('active');
         } else {
+            if (preview) preview.style.display = 'none';
             btn.textContent = btn.getAttribute('data-label-expanded') || '📄 收起長文';
             btn.classList.add('active');
         }
